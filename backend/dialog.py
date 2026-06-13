@@ -162,17 +162,33 @@ class DialogManager:
         try:
             import pyaudio
             p = pyaudio.PyAudio()
-            stream = p.open(
-                format=pyaudio.paFloat32,
-                channels=1,
-                rate=self._sample_rate,
-                input=True,
-                frames_per_buffer=self._chunk_size,
-            )
+            # 先尝试 int16（兼容性最好），不行再 float32
+            try:
+                stream = p.open(
+                    format=pyaudio.paInt16,
+                    channels=1,
+                    rate=self._sample_rate,
+                    input=True,
+                    frames_per_buffer=self._chunk_size,
+                )
+                is_int16 = True
+            except Exception:
+                stream = p.open(
+                    format=pyaudio.paFloat32,
+                    channels=1,
+                    rate=self._sample_rate,
+                    input=True,
+                    frames_per_buffer=self._chunk_size,
+                )
+                is_int16 = False
+
             while self._recording:
                 try:
                     data = stream.read(self._chunk_size, exception_on_overflow=False)
-                    chunk = np.frombuffer(data, dtype=np.float32)
+                    if is_int16:
+                        chunk = np.frombuffer(data, dtype=np.int16).astype(np.float32) / 32768.0
+                    else:
+                        chunk = np.frombuffer(data, dtype=np.float32)
                     self._audio_chunks.append(chunk)
                 except Exception:
                     break
@@ -180,7 +196,6 @@ class DialogManager:
             stream.close()
             p.terminate()
         except ImportError:
-            # pyaudio not available — simulate silence
             while self._recording:
                 self._audio_chunks.append(np.zeros(self._chunk_size, dtype=np.float32))
                 time.sleep(self._chunk_size / self._sample_rate)
