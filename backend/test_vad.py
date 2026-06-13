@@ -1,22 +1,18 @@
 # -*- coding: utf-8 -*-
-"""VAD module unit tests.
-
-Tests VADDetector and SpeechSegmenter core functionality.
-Runs independently with no external service dependencies.
-"""
+"""VAD module tests — VADDetector only (SpeechSegmenter removed)."""
 import sys
 import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import numpy as np
-from backend.vad import VADDetector, SpeechSegmenter
+from backend.vad import VADDetector
 
 
 def test_vad_detector_loading():
-    """VADDetector loads correctly with config defaults."""
+    """VADDetector loads with correct defaults."""
     d = VADDetector()
     assert d.threshold == 0.5, f"Expected threshold 0.5, got: {d.threshold}"
     assert d._sample_rate == 16000
-    print("[PASS] Test 1/5: VADDetector loading")
+    print("[PASS] Test 1/4: VADDetector loading")
 
 
 def test_vad_silence_detection():
@@ -25,7 +21,7 @@ def test_vad_silence_detection():
     silence = np.zeros(16000, dtype=np.float32)  # 1s @ 16kHz
     result = d.is_speech(silence)
     assert result is False, f"Silence should return False, got: {result}"
-    print("[PASS] Test 2/5: Silence detection")
+    print("[PASS] Test 2/4: Silence detection")
 
 
 def test_vad_confidence_range():
@@ -35,33 +31,22 @@ def test_vad_confidence_range():
     confidence = d.get_speech_confidence(silence)
     assert 0.0 <= confidence <= 1.0, f"Confidence out of range: {confidence}"
     print(f"   (silence confidence: {confidence:.3f})")
-    print("[PASS] Test 3/5: Confidence range")
+    print("[PASS] Test 3/4: Confidence range")
 
 
-def test_segmenter_loading():
-    """SpeechSegmenter loads with correct default parameters."""
-    s = SpeechSegmenter()
-    # 2s * 16000Hz = 32000 samples
-    assert s.silence_samples == 32000, f"Expected 32000, got: {s.silence_samples}"
-    assert s.sample_rate == 16000
-    assert not s._is_speaking
-    print("[PASS] Test 4/5: SpeechSegmenter loading")
-
-
-def test_segmenter_silence_passthrough():
-    """Feeding pure silence should produce zero speech segments."""
-    s = SpeechSegmenter()
-    silence = np.zeros(8000, dtype=np.float32)  # 0.5s silence
-    segments = s.add_chunk(silence)
-    assert len(segments) == 0, f"Silence should yield 0 segments, got: {len(segments)}"
-    assert not s._is_speaking, "Should not be in speaking state"
-    print("[PASS] Test 5/5: Silence passthrough")
+def test_vad_short_chunk():
+    """Short audio chunk (< 512 samples) should be handled via zero-padding."""
+    d = VADDetector()
+    short = np.zeros(200, dtype=np.float32)  # < 512 window
+    result = d.is_speech(short)
+    assert isinstance(result, bool)
+    assert result is False
+    print("[PASS] Test 4/4: Short chunk handling")
 
 
 if __name__ == "__main__":
     test_vad_detector_loading()
     test_vad_silence_detection()
     test_vad_confidence_range()
-    test_segmenter_loading()
-    test_segmenter_silence_passthrough()
-    print("\nAll 5 tests passed!")
+    test_vad_short_chunk()
+    print("\nAll 4 tests passed!")
