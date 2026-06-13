@@ -3,9 +3,16 @@ import sys
 import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+import io
+import wave
+import base64
+
+import numpy as np
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.staticfiles import StaticFiles
 from pathlib import Path
+
+from backend.stt import STTEngine
 
 app = FastAPI(title="VisionTalk")
 
@@ -13,9 +20,22 @@ app = FastAPI(title="VisionTalk")
 static_dir = Path(__file__).parent / "static"
 static_dir.mkdir(exist_ok=True)
 
+# Lazy-init engines
+stt_engine: STTEngine | None = None
+
+
+def decode_wav_base64(b64: str) -> np.ndarray:
+    """Decode base64 WAV (int16 PCM, 16kHz mono) to float32 numpy array."""
+    raw = base64.b64decode(b64)
+    with wave.open(io.BytesIO(raw), 'rb') as wf:
+        n_frames = wf.getnframes()
+        pcm = np.frombuffer(wf.readframes(n_frames), dtype=np.int16)
+    return pcm.astype(np.float32) / 32768.0
+
 
 @app.websocket("/ws")
 async def websocket_endpoint(ws: WebSocket):
+    global stt_engine
     await ws.accept()
     try:
         while True:
@@ -29,6 +49,14 @@ async def websocket_endpoint(ws: WebSocket):
                 await ws.send_json({"type": "status", "text": "处理中..."})
             elif msg_type == "audio":
                 print(f"[WS] audio received, {len(data.get('data', ''))} chars base64")
+                if stt_engine is None:
+                    stt_engine = STTEngine()
+                audio = decode_wav_base64(data["data"])
+                text = stt_engine.transcribe(audio, 16000)
+                if text.strip():
+                    await ws.send_json({"type": "transcript", "text": text.strip()})
+                else:
+                    await ws.send_json({"type": "error", "text": "未识别到语音，请重试"})
             else:
                 await ws.send_json({"type": "error", "text": f"Unknown type: {msg_type}"})
     except WebSocketDisconnect:
