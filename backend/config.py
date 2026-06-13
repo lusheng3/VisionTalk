@@ -5,13 +5,10 @@ from pydantic_settings import BaseSettings
 class Settings(BaseSettings):
     """全局配置，自动从 .env 和环境变量加载。"""
 
-    # API Keys
+    # API Key
     dashscope_api_key: str = ""
-    zhipu_api_key: str = ""
-    ernie_api_key: str = ""
-    ernie_secret_key: str = ""
 
-    # 默认模型: qwen-max | qwen-plus | glm-4v | ernie-vl
+    # 默认模型
     default_model: str = "qwen-max"
 
     # 服务端口
@@ -26,17 +23,14 @@ class Settings(BaseSettings):
     # 截帧最大宽度 (像素)
     frame_max_width: int = 768
 
-    # SSIM 去重阈值 (低于此值视为不同帧)
-    ssim_threshold: float = 0.95
+    # 说话时抓帧间隔 (秒)
+    frame_interval_speech: float = 0.5
 
-    # 画面剧变 SSIM 阈值 (低于此值视为场景切换)
-    scene_change_threshold: float = 0.7
+    # 静音时抓帧间隔 (秒)
+    frame_interval_silence: float = 3.0
 
-    # API 去抖间隔 (秒)
-    debounce_seconds: float = 1.5
-
-    # 持续对话模式静音超时 (秒)
-    silence_timeout_seconds: float = 2.0
+    # 每次发给 LLM 的最大帧数
+    max_frames_per_llm_call: int = 5
 
     model_config = {
         "env_file": ".env",
