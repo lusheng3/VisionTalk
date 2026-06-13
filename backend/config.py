@@ -9,7 +9,7 @@ class Settings(BaseSettings):
     dashscope_api_key: str = ""
 
     # 默认模型
-    default_model: str = "qwen3.7-plus"
+    default_model: str = "qwen3.7-max-2026-06-08"
 
     # 服务端口
     port: int = 8765

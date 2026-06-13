@@ -84,10 +84,13 @@
                     addMessage('system', msg.text);
                 } else if (msg.type === 'transcript') {
                     addMessage('user', msg.text);
+                } else if (msg.type === 'stream') {
+                    streamAppend(msg.text);
                 } else if (msg.type === 'response') {
-                    addMessage('ai', msg.text);
+                    streamFinalize();
                     pttLabel.textContent = '点击开始录音';
                 } else if (msg.type === 'error') {
+                    streamFinalize();
                     addMessage('system', '⚠️ ' + msg.text);
                     pttLabel.textContent = '点击开始录音';
                 }
@@ -230,6 +233,26 @@
             div.textContent = text;
             container.appendChild(div);
             container.scrollTop = container.scrollHeight;
+        }
+
+        function streamAppend(text) {
+            const container = document.getElementById('messages');
+            const empty = container.querySelector('.empty');
+            if (empty) empty.remove();
+
+            let div = container.querySelector('.msg.ai.streaming');
+            if (!div) {
+                div = document.createElement('div');
+                div.className = 'msg ai streaming';
+                container.appendChild(div);
+            }
+            div.textContent += text;
+            container.scrollTop = container.scrollHeight;
+        }
+
+        function streamFinalize() {
+            const div = document.querySelector('.msg.ai.streaming');
+            if (div) div.classList.remove('streaming');
         }
 
         // ── PTT Button ──

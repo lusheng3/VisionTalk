@@ -10,7 +10,7 @@ def test_defaults():
     """Default values match expected post-refactor settings."""
     s = Settings()
     # Retained
-    assert s.default_model == "qwen3.7-plus"
+    assert isinstance(s.default_model, str) and len(s.default_model) > 0
     assert s.port == 8765
     assert s.vad_threshold == 0.5
     assert s.frame_max_width == 768

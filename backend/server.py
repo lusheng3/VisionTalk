@@ -113,21 +113,31 @@ async def websocket_endpoint(ws: WebSocket):
 
                 await ws.send_json({"type": "transcript", "text": text.strip()})
 
-                # LLM 调用
+                # LLM 调用（流式）
                 try:
                     if llm_engine is None:
                         log.info("[3/3] 🔧 首次加载 LLM...")
                         llm_engine = QwenVisionLLM()
                     frames = data.get("frames", [])
-                    log.info(f"[3/3] 🤖 调用 LLM | 输入文本=「{text.strip()}」 | 帧数={len(frames)}")
-                    reply, in_tok, out_tok = await llm_engine.chat(
+                    log.info(f"[3/3] 🤖 流式 LLM | 输入文本=「{text.strip()}」 | 帧数={len(frames)}")
+
+                    reply_parts = []
+                    first_token_time = None
+                    async for token in llm_engine.chat_stream(
                         user_text=text.strip(),
                         frames=frames,
                         system_prompt="你是一个有用的视觉助手。只在用户明确询问画面内容时才描述画面。回答简洁，不超过三句话。",
-                    )
+                    ):
+                        if first_token_time is None:
+                            first_token_time = time.time() - t_start
+                            log.info(f"[3/3] ⚡ 首 token 延迟: {first_token_time:.1f}s")
+                        reply_parts.append(token)
+                        await ws.send_json({"type": "stream", "text": token})
+
+                    reply = "".join(reply_parts)
                     llm_cost = time.time() - t_start
-                    log.info(f"[3/3] ✅ LLM 回复: 「{reply}」")
-                    log.info(f"[3/3]    Token: {in_tok}入 / {out_tok}出 | LLM耗时 {llm_cost:.1f}s")
+                    log.info(f"[3/3] ✅ LLM 回复: 「{reply[:80]}{'...' if len(reply) > 80 else ''}」")
+                    log.info(f"[3/3]    首token={first_token_time:.1f}s | 总耗时={llm_cost:.1f}s")
                     await ws.send_json({"type": "response", "text": reply})
                 except Exception as e:
                     log.error(f"[3/3] ❌ LLM 调用失败: {e}\n{traceback.format_exc()}")
