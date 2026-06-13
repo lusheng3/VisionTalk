@@ -37,7 +37,7 @@ Web mode (primary):                    CLI mode (legacy):
       → llm.py (Qwen DashScope)              → llm.py
 ```
 
-**Web pipeline** (`backend/server.py` + `backend/static/index.html`):
+**Web pipeline** (`backend/server.py` + `frontend/index.html`):
 - Frontend: vanilla HTML/JS, getUserMedia for camera+mic, Canvas → JPEG frames, AudioContext → PCM → WAV encode → WebSocket JSON
 - Backend: single `/ws` WebSocket endpoint, WAV decode via `wave` stdlib, STT → LLM, structured logging with timing to both console and `logs/visiontalk-YYYYMMDD.log`
 - Protocol: `ptt_start` → `audio`{wav base64} + `ptt_stop`{frames[]} → `transcript` → `response`
@@ -51,7 +51,7 @@ Web mode (primary):                    CLI mode (legacy):
 | File | Role | Notes |
 |------|------|------|
 | `backend/server.py` | FastAPI + WebSocket | Main entry for web app |
-| `backend/static/index.html` | Entire frontend | Single file, no framework |
+| `frontend/index.html` | Entire frontend | Single file, no framework |
 | `backend/stt.py` | STTEngine | faster-whisper tiny, CPU int8, downloads ~70MB on first run |
 | `backend/llm.py` | QwenVisionLLM | DashScope OpenAI-compatible API, single model no abstraction |
 | `backend/config.py` | Settings | Loads from `.env`, `pydantic-settings` |

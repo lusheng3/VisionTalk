@@ -81,10 +81,11 @@ python backend/server.py
 ```
 backend/
   server.py              FastAPI + WebSocket 服务
-  static/index.html      前端页面 (摄像头 + PTT + 对话)
   stt.py                 语音识别 (faster-whisper)
   llm.py                 LLM 调用 (千问 DashScope)
   config.py              配置管理
+frontend/
+  index.html              前端页面 (摄像头 + PTT + 对话)
 ```
 
 ## 成本控制

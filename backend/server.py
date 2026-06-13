@@ -38,8 +38,7 @@ from backend.llm import QwenVisionLLM
 app = FastAPI(title="VisionTalk")
 
 # Static files (frontend)
-static_dir = Path(__file__).parent / "static"
-static_dir.mkdir(exist_ok=True)
+frontend_dir = Path(__file__).parent.parent / "frontend"
 
 # Lazy-init engines
 stt_engine: STTEngine | None = None
@@ -147,7 +146,7 @@ async def websocket_endpoint(ws: WebSocket):
         log.error(f"[异常] {client} 未捕获错误: {e}\n{traceback.format_exc()}")
 
 
-app.mount("/", StaticFiles(directory=str(static_dir), html=True), name="static")
+app.mount("/", StaticFiles(directory=str(frontend_dir), html=True), name="frontend")
 
 if __name__ == "__main__":
     import uvicorn
