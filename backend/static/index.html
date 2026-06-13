@@ -154,6 +154,54 @@
             return buffer;
         }
 
+        // ── Frame Capture ──
+        const FRAME_BUFFER_SIZE = 30;
+        const FRAME_INTERVAL_IDLE = 3000;
+        const FRAME_INTERVAL_SPEECH = 500;
+        let frameBuffer = [];
+        let frameTimer = null;
+
+        function captureFrame() {
+            const canvas = document.createElement('canvas');
+            canvas.width = video.videoWidth || 640;
+            canvas.height = video.videoHeight || 480;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            const jpeg = canvas.toDataURL('image/jpeg', 0.75);
+            const base64 = jpeg.split(',')[1];
+            frameBuffer.push(base64);
+            if (frameBuffer.length > FRAME_BUFFER_SIZE) {
+                frameBuffer = frameBuffer.slice(-FRAME_BUFFER_SIZE);
+            }
+        }
+
+        function startFrameCapture(interval) {
+            stopFrameCapture();
+            captureFrame();
+            frameTimer = setInterval(captureFrame, interval);
+        }
+
+        function stopFrameCapture() {
+            if (frameTimer) {
+                clearInterval(frameTimer);
+                frameTimer = null;
+            }
+        }
+
+        function getFramesForLLM(durationSeconds) {
+            let count;
+            if (durationSeconds <= 3) count = 3;
+            else if (durationSeconds <= 10) count = 5;
+            else if (durationSeconds <= 20) count = 8;
+            else count = 10;
+            if (frameBuffer.length <= count) return [...frameBuffer];
+            const step = (frameBuffer.length - 1) / (count - 1);
+            const indices = [];
+            for (let i = 0; i < count - 1; i++) indices.push(Math.floor(i * step));
+            indices.push(frameBuffer.length - 1);
+            return indices.map(i => frameBuffer[i]);
+        }
+
         // ── Messages ──
         function addMessage(role, text) {
             const container = document.getElementById('messages');
@@ -171,19 +219,25 @@
         const pttBtn = document.getElementById('pttBtn');
         const pttLabel = document.getElementById('pttLabel');
         let isRecording = false;
+        let recordingStartTime = 0;
 
         pttBtn.addEventListener('click', async () => {
             isRecording = !isRecording;
             if (isRecording) {
+                recordingStartTime = Date.now();
                 pttBtn.textContent = '⏹';
                 pttBtn.classList.add('recording');
                 pttLabel.textContent = '录音中... 再点击停止';
+                startFrameCapture(FRAME_INTERVAL_SPEECH);
                 await startRecording();
                 ws.send(JSON.stringify({ type: 'ptt_start' }));
             } else {
                 pttBtn.textContent = '🎤';
                 pttBtn.classList.remove('recording');
                 pttLabel.textContent = '处理中...';
+
+                const duration = (Date.now() - recordingStartTime) / 1000;
+                startFrameCapture(FRAME_INTERVAL_IDLE);
 
                 const allSamples = [];
                 for (const chunk of audioChunks) {
@@ -197,14 +251,16 @@
                     return;
                 }
 
+                const frames = getFramesForLLM(duration);
                 const wav = encodeWAV(allSamples);
                 const base64 = btoa(String.fromCharCode(...new Uint8Array(wav)));
 
-                ws.send(JSON.stringify({ type: 'ptt_stop', frames: [] }));
+                ws.send(JSON.stringify({ type: 'ptt_stop', frames: frames }));
                 ws.send(JSON.stringify({ type: 'audio', data: base64 }));
             }
         });
 
+        startFrameCapture(FRAME_INTERVAL_IDLE);
         startCamera();
     </script>
 </body>
