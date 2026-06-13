@@ -13,6 +13,7 @@ from fastapi.staticfiles import StaticFiles
 from pathlib import Path
 
 from backend.stt import STTEngine
+from backend.llm import QwenVisionLLM
 
 app = FastAPI(title="VisionTalk")
 
@@ -22,6 +23,7 @@ static_dir.mkdir(exist_ok=True)
 
 # Lazy-init engines
 stt_engine: STTEngine | None = None
+llm_engine: QwenVisionLLM | None = None
 
 
 def decode_wav_base64(b64: str) -> np.ndarray:
@@ -55,6 +57,17 @@ async def websocket_endpoint(ws: WebSocket):
                 text = stt_engine.transcribe(audio, 16000)
                 if text.strip():
                     await ws.send_json({"type": "transcript", "text": text.strip()})
+                    # LLM call
+                    global llm_engine
+                    if llm_engine is None:
+                        llm_engine = QwenVisionLLM()
+                    frames = data.get("frames", [])
+                    reply, _, _ = await llm_engine.chat(
+                        user_text=text.strip(),
+                        frames=frames,
+                        system_prompt="你是一个有用的视觉助手。只在用户明确询问画面内容时才描述画面。回答简洁，不超过三句话。",
+                    )
+                    await ws.send_json({"type": "response", "text": reply})
                 else:
                     await ws.send_json({"type": "error", "text": "未识别到语音，请重试"})
             else:
