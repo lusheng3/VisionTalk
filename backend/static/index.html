@@ -134,6 +134,16 @@
             audioChunks = [];
         }
 
+        function arrayBufferToBase64(buffer) {
+            const bytes = new Uint8Array(buffer);
+            const CHUNK = 0x8000;  // 32KB chunks, avoids call stack overflow
+            let binary = '';
+            for (let i = 0; i < bytes.length; i += CHUNK) {
+                binary += String.fromCharCode.apply(null, bytes.subarray(i, i + CHUNK));
+            }
+            return btoa(binary);
+        }
+
         function encodeWAV(samples) {
             const numSamples = samples.length;
             const buffer = new ArrayBuffer(44 + numSamples * 2);
@@ -260,7 +270,7 @@
 
                 const frames = getFramesForLLM(duration);
                 const wav = encodeWAV(allSamples);
-                const base64 = btoa(String.fromCharCode(...new Uint8Array(wav)));
+                const base64 = arrayBufferToBase64(wav);
 
                 ws.send(JSON.stringify({ type: 'ptt_stop', frames: frames }));
                 ws.send(JSON.stringify({ type: 'audio', data: base64 }));
