@@ -68,25 +68,32 @@
         }
 
         // ── WebSocket ──
-        const ws = new WebSocket(`ws://${location.host}/ws`);
-        ws.onopen = () => console.log('[WS] Connected');
-        ws.onclose = () => console.log('[WS] Disconnected');
-        ws.onerror = () => addMessage('system', '⚠️ 连接断开，刷新页面重试');
-        ws.onmessage = (e) => {
-            const msg = JSON.parse(e.data);
-            console.log('[WS] Server:', msg.type, msg.text || '');
-            if (msg.type === 'status') {
-                addMessage('system', msg.text);
-            } else if (msg.type === 'transcript') {
-                addMessage('user', msg.text);
-            } else if (msg.type === 'response') {
-                addMessage('ai', msg.text);
-                pttLabel.textContent = '点击开始录音';
-            } else if (msg.type === 'error') {
-                addMessage('system', '⚠️ ' + msg.text);
-                pttLabel.textContent = '点击开始录音';
-            }
-        };
+        let ws;
+        function connectWS() {
+            ws = new WebSocket(`ws://${location.host}/ws`);
+            ws.onopen = () => console.log('[WS] Connected');
+            ws.onclose = () => {
+                console.log('[WS] Disconnected, reconnecting in 2s...');
+                setTimeout(connectWS, 2000);
+            };
+            ws.onerror = () => addMessage('system', '⚠️ 连接断开，正在重连...');
+            ws.onmessage = (e) => {
+                const msg = JSON.parse(e.data);
+                console.log('[WS] Server:', msg.type, msg.text || '');
+                if (msg.type === 'status') {
+                    addMessage('system', msg.text);
+                } else if (msg.type === 'transcript') {
+                    addMessage('user', msg.text);
+                } else if (msg.type === 'response') {
+                    addMessage('ai', msg.text);
+                    pttLabel.textContent = '点击开始录音';
+                } else if (msg.type === 'error') {
+                    addMessage('system', '⚠️ ' + msg.text);
+                    pttLabel.textContent = '点击开始录音';
+                }
+            };
+        }
+        connectWS();
 
         // ── Audio Recording ──
         let audioChunks = [];
