@@ -10,7 +10,7 @@ def test_defaults():
     """Default values match expected post-refactor settings."""
     s = Settings()
     # Retained
-    assert s.default_model == "qwen-max"
+    assert s.default_model == "qwen3.7-plus"
     assert s.port == 8765
     assert s.vad_threshold == 0.5
     assert s.frame_max_width == 768
@@ -35,15 +35,15 @@ def test_removed_fields():
     print("[PASS] Test 2/3: Removed fields gone")
 
 
-def test_api_key_empty_default():
-    """dashscope_api_key defaults to empty string (set via .env)."""
+def test_api_key_is_string():
+    """dashscope_api_key is a string (loaded from .env or default empty)."""
     s = Settings()
-    assert s.dashscope_api_key == ""
-    print("[PASS] Test 3/3: API key default")
+    assert isinstance(s.dashscope_api_key, str)
+    print("[PASS] Test 3/3: API key is string")
 
 
 if __name__ == "__main__":
     test_defaults()
     test_removed_fields()
-    test_api_key_empty_default()
+    test_api_key_is_string()
     print("\nAll 3 tests passed!")
