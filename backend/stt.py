@@ -11,7 +11,7 @@ class STTEngine:
     首次使用时会自动下载模型到本地缓存 (~70MB for tiny)。
     """
 
-    def __init__(self, model_size: str = "tiny"):
+    def __init__(self, model_size: str = "small"):
         self.model_size = model_size
         self._model = None
 

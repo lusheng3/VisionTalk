@@ -115,3 +115,33 @@ class QwenVisionLLM:
         messages.append({"role": "user", "content": content_parts})
 
         return messages
+
+    async def chat_stream(
+        self,
+        user_text: str,
+        frames: list[str],
+        history: list[dict] | None = None,
+        system_prompt: str = "",
+        max_tokens: int = 1024,
+    ):
+        """流式调用通义千问 API，逐 token 返回。
+
+        Yields:
+            str: 每个文本增量 token。
+        """
+        history = history or []
+        messages = self._build_messages(user_text, frames, history, system_prompt)
+        client = self._get_client()
+
+        stream = await client.chat.completions.create(
+            model=self._model,
+            messages=messages,
+            max_tokens=max_tokens,
+            stream=True,
+            stream_options={"include_usage": True},
+        )
+
+        for chunk in stream:
+            delta = chunk.choices[0].delta if chunk.choices else None
+            if delta and delta.content:
+                yield delta.content
