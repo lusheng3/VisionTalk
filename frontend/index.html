@@ -185,7 +185,7 @@
         const FRAME_JPEG_QUALITY = 0.55;
         const FRAME_WINDOW_SECONDS = 15;  // time-based sliding window
 
-        // frameBuffer: [{base64, timestamp, hash, isAction}, ...]
+        // frameBuffer: [{base64, timestamp}, ...]
         let frameBuffer = [];
         let frameTimer = null;
         let lastPHash = null;  // BigInt perceptual hash
@@ -221,7 +221,6 @@
         }
 
         const DEDUP_HAMMING_THRESHOLD = 5;   // < 5 bits diff = duplicate
-        const ACTION_HAMMING_THRESHOLD = 8;  // >= 8 bits diff = action frame
 
         function captureFrame() {
             if (!video.videoWidth || !video.videoHeight) return;  // video stream not ready yet
@@ -234,18 +233,16 @@
             const ctx = canvas.getContext('2d');
             ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-            // pHash dedup + action detection
+            // pHash dedup
             const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
             const phash = pHash(imgData, 32);
-            const dist = lastPHash !== null ? hammingDistance(phash, lastPHash) : 0;
-            if (lastPHash !== null && dist < DEDUP_HAMMING_THRESHOLD) return;
+            if (lastPHash !== null && hammingDistance(phash, lastPHash) < DEDUP_HAMMING_THRESHOLD) return;
             lastPHash = phash;
-            const isAction = dist >= ACTION_HAMMING_THRESHOLD;
 
             const jpeg = canvas.toDataURL('image/jpeg', FRAME_JPEG_QUALITY);
             const base64 = jpeg.split(',')[1];
             const now = Date.now();
-            frameBuffer.push({ base64, timestamp: now, hash: phash, isAction: isAction });
+            frameBuffer.push({ base64, timestamp: now });
             // Purge frames older than window
             const cutoff = now - FRAME_WINDOW_SECONDS * 1000;
             frameBuffer = frameBuffer.filter(f => f.timestamp > cutoff);
@@ -264,30 +261,18 @@
             }
         }
 
-        function getFramesForLLM() {
+        function getFramesForLLM(pttFrames) {
             const MAX_FRAMES = 5;
-            if (frameBuffer.length === 0) return [];
+            if (pttFrames.length === 0) return [];
+            if (pttFrames.length <= MAX_FRAMES) return pttFrames.map(f => f.base64);
 
-            const selected = new Set();
+            // Uniform sampling within PTT window, always include last frame
+            const step = (pttFrames.length - 1) / (MAX_FRAMES - 1);
+            const indices = new Set();
+            for (let i = 0; i < MAX_FRAMES - 1; i++) indices.add(Math.floor(i * step));
+            indices.add(pttFrames.length - 1);  // last frame always
 
-            // 1. Action frames (max 3, most recent first)
-            const actions = frameBuffer.filter(f => f.isAction).slice(-3);
-            for (const f of actions) selected.add(f);
-
-            // 2. Always include the last frame
-            const lastFrame = frameBuffer[frameBuffer.length - 1];
-            selected.add(lastFrame);
-
-            // 3. Fill remaining slots with most recent non-selected frames
-            for (let i = frameBuffer.length - 1; i >= 0 && selected.size < MAX_FRAMES; i--) {
-                selected.add(frameBuffer[i]);
-            }
-
-            // 4. Sort by timestamp, return base64 strings
-            return [...selected]
-                .sort((a, b) => a.timestamp - b.timestamp)
-                .slice(0, MAX_FRAMES)
-                .map(f => f.base64);
+            return [...indices].sort((a, b) => a - b).map(i => pttFrames[i].base64);
         }
 
         // ── Messages ──
@@ -327,12 +312,12 @@
         const pttBtn = document.getElementById('pttBtn');
         const pttLabel = document.getElementById('pttLabel');
         let isRecording = false;
-        let recordingStartTime = 0;
+        let pttStartIndex = 0;
 
         pttBtn.addEventListener('click', async () => {
             isRecording = !isRecording;
             if (isRecording) {
-                recordingStartTime = Date.now();
+                pttStartIndex = frameBuffer.length;
                 pttBtn.textContent = '⏹';
                 pttBtn.classList.add('recording');
                 pttLabel.textContent = '录音中... 再点击停止';
@@ -358,7 +343,8 @@
                     return;
                 }
 
-                const frames = getFramesForLLM();
+                const pttFrames = frameBuffer.slice(pttStartIndex);
+                const frames = getFramesForLLM(pttFrames);
                 const sampleRate = window._audioSampleRate || 16000;
                 const wav = encodeWAV(allSamples, sampleRate);
                 const base64 = arrayBufferToBase64(wav);
