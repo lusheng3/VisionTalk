@@ -190,9 +190,10 @@
         let lastFrameHash = null;
 
         function captureFrame() {
+            if (!video.videoWidth || !video.videoHeight) return;  // video not ready
             const canvas = document.createElement('canvas');
-            const rawW = video.videoWidth || 640;
-            const rawH = video.videoHeight || 480;
+            const rawW = video.videoWidth;
+            const rawH = video.videoHeight;
             // Downscale
             const scale = Math.min(1, FRAME_MAX_WIDTH / rawW);
             canvas.width = Math.round(rawW * scale);
