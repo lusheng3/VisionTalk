@@ -188,42 +188,9 @@
         // frameBuffer: [{base64, timestamp}, ...]
         let frameBuffer = [];
         let frameTimer = null;
-        let lastPHash = null;  // BigInt perceptual hash
-
-        // ── Perceptual Hash (pHash) ──
-        function pHash(imageData, size) {
-            // Downsample to size×size grayscale
-            const pixels = [];
-            for (let y = 0; y < size; y++) {
-                for (let x = 0; x < size; x++) {
-                    const sx = Math.floor(x * imageData.width / size);
-                    const sy = Math.floor(y * imageData.height / size);
-                    const i = (sy * imageData.width + sx) * 4;
-                    pixels.push(0.299 * imageData.data[i] + 0.587 * imageData.data[i+1] + 0.114 * imageData.data[i+2]);
-                }
-            }
-            // Average hash: compare each pixel to mean
-            const mean = pixels.reduce((a, b) => a + b, 0) / pixels.length;
-            let hash = BigInt(0);
-            for (let i = 0; i < 64; i++) {
-                if (pixels[Math.floor(i * pixels.length / 64)] > mean) {
-                    hash |= (1n << BigInt(i));
-                }
-            }
-            return hash;
-        }
-
-        function hammingDistance(a, b) {
-            let xor = a ^ b;
-            let count = 0;
-            while (xor) { count++; xor &= (xor - 1n); }
-            return count;
-        }
-
-        const DEDUP_HAMMING_THRESHOLD = 5;   // < 5 bits diff = duplicate
 
         function captureFrame() {
-            if (!video.videoWidth || !video.videoHeight) return;  // video stream not ready yet
+            if (!video.videoWidth || !video.videoHeight) return;
             const canvas = document.createElement('canvas');
             const rawW = video.videoWidth;
             const rawH = video.videoHeight;
@@ -232,12 +199,6 @@
             canvas.height = Math.round(rawH * scale);
             const ctx = canvas.getContext('2d');
             ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-
-            // pHash dedup
-            const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-            const phash = pHash(imgData, 32);
-            if (lastPHash !== null && hammingDistance(phash, lastPHash) < DEDUP_HAMMING_THRESHOLD) return;
-            lastPHash = phash;
 
             const jpeg = canvas.toDataURL('image/jpeg', FRAME_JPEG_QUALITY);
             const base64 = jpeg.split(',')[1];
@@ -318,7 +279,6 @@
             isRecording = !isRecording;
             if (isRecording) {
                 pttStartIndex = frameBuffer.length;
-                lastPHash = null;  // reset dedup for PTT window
                 pttBtn.textContent = '⏹';
                 pttBtn.classList.add('recording');
                 pttLabel.textContent = '录音中... 再点击停止';
