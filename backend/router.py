@@ -35,11 +35,15 @@ async def needs_visual(user_text: str) -> bool:
                 {"role": "system", "content": ROUTER_PROMPT},
                 {"role": "user", "content": user_text},
             ],
-            max_tokens=3,
-            temperature=0,
+            max_tokens=10,
         )
-        result = resp.choices[0].message.content.strip().upper()
+        raw = resp.choices[0].message.content or ""
+        result = raw.strip().upper()
         elapsed = time.time() - t0
+        # Empty response → assume visual (safe side)
+        if not result:
+            log.warning(f"[Router] ⚠️ empty response (raw='{raw}'), fallback → YES")
+            return True
         is_visual = "YES" in result
         log.info(f"[Router] 🧠 DeepSeek → {result} | 耗时 {elapsed:.2f}s | text='{user_text[:30]}'")
         return is_visual
