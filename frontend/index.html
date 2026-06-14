@@ -220,8 +220,8 @@
             return count;
         }
 
-        const DEDUP_HAMMING_THRESHOLD = 8;   // < 8 bits diff = duplicate
-        const ACTION_HAMMING_THRESHOLD = 12; // >= 12 bits diff = action frame
+        const DEDUP_HAMMING_THRESHOLD = 5;   // < 5 bits diff = duplicate
+        const ACTION_HAMMING_THRESHOLD = 8;  // >= 8 bits diff = action frame
 
         function captureFrame() {
             if (!video.videoWidth || !video.videoHeight) return;  // video stream not ready yet
