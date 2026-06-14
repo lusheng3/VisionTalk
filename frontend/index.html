@@ -263,32 +263,30 @@
             }
         }
 
-        function getFramesForLLM(durationSeconds) {
-            let count;
-            if (durationSeconds <= 3) count = 3;
-            else if (durationSeconds <= 10) count = 5;
-            else if (durationSeconds <= 20) count = 8;
-            else count = 10;
-            let selected;
-            if (frameBuffer.length <= count) {
-                selected = [...frameBuffer];
-            } else {
-                const step = (frameBuffer.length - 1) / (count - 1);
-                const indices = [];
-                for (let i = 0; i < count - 1; i++) indices.push(Math.floor(i * step));
-                indices.push(frameBuffer.length - 1);
-                selected = indices.map(i => frameBuffer[i]);
+        function getFramesForLLM() {
+            const MAX_FRAMES = 5;
+            if (frameBuffer.length === 0) return [];
+
+            const selected = new Set();
+
+            // 1. Action frames (max 3, most recent first)
+            const actions = frameBuffer.filter(f => f.isAction).slice(-3);
+            for (const f of actions) selected.add(f);
+
+            // 2. Always include the last frame
+            const lastFrame = frameBuffer[frameBuffer.length - 1];
+            selected.add(lastFrame);
+
+            // 3. Fill remaining slots with most recent non-selected frames
+            for (let i = frameBuffer.length - 1; i >= 0 && selected.size < MAX_FRAMES; i--) {
+                selected.add(frameBuffer[i]);
             }
-            // Secondary dedup on frame objects
-            const deduped = [selected[0]];
-            for (let i = 1; i < selected.length; i++) {
-                const mid = (f) => f.base64.substring(f.base64.length >> 1, (f.base64.length >> 1) + 200);
-                if (mid(selected[i]) !== mid(selected[i - 1])) {
-                    deduped.push(selected[i]);
-                }
-            }
-            // Return base64 strings
-            return deduped.map(f => f.base64);
+
+            // 4. Sort by timestamp, return base64 strings
+            return [...selected]
+                .sort((a, b) => a.timestamp - b.timestamp)
+                .slice(0, MAX_FRAMES)
+                .map(f => f.base64);
         }
 
         // ── Messages ──
@@ -345,7 +343,6 @@
                 pttBtn.classList.remove('recording');
                 pttLabel.textContent = '处理中...';
 
-                const duration = (Date.now() - recordingStartTime) / 1000;
                 startFrameCapture(FRAME_INTERVAL_IDLE);
 
                 const allSamples = [];
@@ -360,7 +357,7 @@
                     return;
                 }
 
-                const frames = getFramesForLLM(duration);
+                const frames = getFramesForLLM();
                 const sampleRate = window._audioSampleRate || 16000;
                 const wav = encodeWAV(allSamples, sampleRate);
                 const base64 = arrayBufferToBase64(wav);
