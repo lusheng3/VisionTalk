@@ -181,8 +181,8 @@
         const FRAME_BUFFER_SIZE = 30;
         const FRAME_INTERVAL_IDLE = 3000;
         const FRAME_INTERVAL_SPEECH = 500;
-        const FRAME_MAX_WIDTH = 512;      // downscale for LLM
-        const FRAME_JPEG_QUALITY = 0.6;   // smaller size, fewer tokens
+        const FRAME_MAX_WIDTH = 384;      // downscale for LLM
+        const FRAME_JPEG_QUALITY = 0.55;  // smaller size, fewer tokens
         const FRAME_DEDUP_THRESHOLD = 0.95; // skip near-identical frames
 
         let frameBuffer = [];
