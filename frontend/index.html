@@ -219,7 +219,8 @@
             return count;
         }
 
-        const DEDUP_HAMMING_THRESHOLD = 8;  // < 8 bits diff = duplicate
+        const DEDUP_HAMMING_THRESHOLD = 8;   // < 8 bits diff = duplicate
+        const ACTION_HAMMING_THRESHOLD = 12; // >= 12 bits diff = action frame
 
         function captureFrame() {
             if (!video.videoWidth || !video.videoHeight) return;
@@ -232,16 +233,18 @@
             const ctx = canvas.getContext('2d');
             ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-            // pHash dedup
+            // pHash dedup + action detection
             const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
             const phash = pHash(imgData, 32);
-            if (lastPHash !== null && hammingDistance(phash, lastPHash) < DEDUP_HAMMING_THRESHOLD) return;
+            const dist = lastPHash !== null ? hammingDistance(phash, lastPHash) : 0;
+            if (dist < DEDUP_HAMMING_THRESHOLD) return;
             lastPHash = phash;
+            const isAction = dist >= ACTION_HAMMING_THRESHOLD;
 
             const jpeg = canvas.toDataURL('image/jpeg', FRAME_JPEG_QUALITY);
             const base64 = jpeg.split(',')[1];
             const now = Date.now();
-            frameBuffer.push({ base64, timestamp: now, hash: phash, isAction: false });
+            frameBuffer.push({ base64, timestamp: now, hash: phash, isAction: isAction });
             // Purge frames older than window
             const cutoff = now - FRAME_WINDOW_SECONDS * 1000;
             frameBuffer = frameBuffer.filter(f => f.timestamp > cutoff);
