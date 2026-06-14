@@ -318,6 +318,7 @@
             isRecording = !isRecording;
             if (isRecording) {
                 pttStartIndex = frameBuffer.length;
+                lastPHash = null;  // reset dedup for PTT window
                 pttBtn.textContent = '⏹';
                 pttBtn.classList.add('recording');
                 pttLabel.textContent = '录音中... 再点击停止';
