@@ -45,6 +45,7 @@ class STTEngine:
             task = dashscope.audio.asr.Transcription.async_call(
                 model="paraformer-v2",
                 file_urls=[data_url],
+                language_hints=["zh"],
             )
             if task.status_code != 200:
                 log.error(f"[STT] Submit failed: {task.message}")
