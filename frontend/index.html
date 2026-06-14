@@ -178,17 +178,37 @@
         const FRAME_BUFFER_SIZE = 30;
         const FRAME_INTERVAL_IDLE = 3000;
         const FRAME_INTERVAL_SPEECH = 500;
+        const FRAME_MAX_WIDTH = 512;      // downscale for LLM
+        const FRAME_JPEG_QUALITY = 0.6;   // smaller size, fewer tokens
+        const FRAME_DEDUP_THRESHOLD = 0.95; // skip near-identical frames
+
         let frameBuffer = [];
         let frameTimer = null;
+        let lastFrameHash = null;
 
         function captureFrame() {
             const canvas = document.createElement('canvas');
-            canvas.width = video.videoWidth || 640;
-            canvas.height = video.videoHeight || 480;
+            const rawW = video.videoWidth || 640;
+            const rawH = video.videoHeight || 480;
+            // Downscale
+            const scale = Math.min(1, FRAME_MAX_WIDTH / rawW);
+            canvas.width = Math.round(rawW * scale);
+            canvas.height = Math.round(rawH * scale);
             const ctx = canvas.getContext('2d');
             ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-            const jpeg = canvas.toDataURL('image/jpeg', 0.75);
+            const jpeg = canvas.toDataURL('image/jpeg', FRAME_JPEG_QUALITY);
             const base64 = jpeg.split(',')[1];
+
+            // Simple dedup: skip if nearly identical to last frame
+            if (lastFrameHash !== null) {
+                // Quick check: compare first 100 chars of base64 (JPEG header changes if image differs)
+                const hash = base64.substring(0, 100);
+                if (hash === lastFrameHash) return;
+                lastFrameHash = hash;
+            } else {
+                lastFrameHash = base64.substring(0, 100);
+            }
+
             frameBuffer.push(base64);
             if (frameBuffer.length > FRAME_BUFFER_SIZE) {
                 frameBuffer = frameBuffer.slice(-FRAME_BUFFER_SIZE);
@@ -214,12 +234,24 @@
             else if (durationSeconds <= 10) count = 5;
             else if (durationSeconds <= 20) count = 8;
             else count = 10;
-            if (frameBuffer.length <= count) return [...frameBuffer];
-            const step = (frameBuffer.length - 1) / (count - 1);
-            const indices = [];
-            for (let i = 0; i < count - 1; i++) indices.push(Math.floor(i * step));
-            indices.push(frameBuffer.length - 1);
-            return indices.map(i => frameBuffer[i]);
+            let frames;
+            if (frameBuffer.length <= count) {
+                frames = [...frameBuffer];
+            } else {
+                const step = (frameBuffer.length - 1) / (count - 1);
+                const indices = [];
+                for (let i = 0; i < count - 1; i++) indices.push(Math.floor(i * step));
+                indices.push(frameBuffer.length - 1);
+                frames = indices.map(i => frameBuffer[i]);
+            }
+            // Secondary dedup: remove consecutive near-identical frames
+            const deduped = [frames[0]];
+            for (let i = 1; i < frames.length; i++) {
+                if (frames[i].substring(0, 100) !== frames[i - 1].substring(0, 100)) {
+                    deduped.push(frames[i]);
+                }
+            }
+            return deduped;
         }
 
         // ── Messages ──
