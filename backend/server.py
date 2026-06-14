@@ -132,17 +132,11 @@ async def websocket_endpoint(ws: WebSocket):
                     frames = pending_frames
                     pending_frames = []
 
-                    # 非视觉问题跳过图片（省 token + 加速）
-                    VISUAL_KEYWORDS = [
-                        "看", "这", "那", "什么", "画面", "图片", "照片", "颜色",
-                        "哪个", "哪里", "里面", "手上", "手里", "桌面", "屏幕",
-                        "这是", "那是", "介绍", "描述", "识别", "镜头", "摄像头",
-                        "你看到", "看看", "帮我", "瞧瞧",
-                    ]
-                    text_lower = text.strip()
-                    is_visual = any(kw in text_lower for kw in VISUAL_KEYWORDS)
+                    # DeepSeek 路由器：判断是否需要画面
+                    from backend.router import needs_visual
+                    is_visual = await needs_visual(text.strip())
                     if not is_visual and frames:
-                        log.info(f"[3/3] 🎯 非视觉问题，跳过 {len(frames)} 帧")
+                        log.info(f"[3/3] 🧠 非视觉问题，跳过 {len(frames)} 帧")
                         frames = []
                     elif frames:
                         log.info(f"[3/3] 🤖 流式 LLM | 输入文本=「{text.strip()}」 | 帧数={len(frames)}")

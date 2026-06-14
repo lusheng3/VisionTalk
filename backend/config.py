@@ -5,8 +5,9 @@ from pydantic_settings import BaseSettings
 class Settings(BaseSettings):
     """全局配置，自动从 .env 和环境变量加载。"""
 
-    # API Key
+    # API Keys
     dashscope_api_key: str = ""
+    deepseek_api_key: str = ""
 
     # 默认模型
     default_model: str = "qwen3.7-plus"
