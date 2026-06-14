@@ -75,7 +75,7 @@ async def websocket_endpoint(ws: WebSocket):
             elif msg_type == "ptt_stop":
                 pending_frames = data.get("frames", [])
                 log.info(f"[PTT] ⏹ 录音结束，前端传来 {len(pending_frames)} 帧")
-                await ws.send_json({"type": "status", "text": "转写中..."})
+                await ws.send_json({"type": "status", "text": "🔊 语音转文字中..."})
 
             elif msg_type == "audio":
                 audio_b64 = data.get("data", "")
@@ -112,7 +112,9 @@ async def websocket_endpoint(ws: WebSocket):
                     log.info(f"[本轮结束] 无文本，跳过 LLM")
                     continue
 
+                stt_time = time.time() - t_start
                 await ws.send_json({"type": "transcript", "text": text.strip()})
+                await ws.send_json({"type": "status", "text": "🤖 AI 思考中..."})
 
                 # LLM 调用（流式）
                 try:
@@ -153,10 +155,18 @@ async def websocket_endpoint(ws: WebSocket):
                         await ws.send_json({"type": "stream", "text": token})
 
                     reply = "".join(reply_parts)
-                    llm_cost = time.time() - t_start
+                    llm_time = time.time() - t_start - stt_time
+                    total = time.time() - t_start
                     log.info(f"[3/3] ✅ LLM 回复: 「{reply[:80]}{'...' if len(reply) > 80 else ''}」")
-                    log.info(f"[3/3]    首token={first_token_time:.1f}s | 总耗时={llm_cost:.1f}s")
+                    log.info(f"[3/3]    首token={first_token_time:.1f}s | LLM纯耗时={llm_time:.1f}s | 总耗时={total:.1f}s")
                     await ws.send_json({"type": "response", "text": reply})
+                    await ws.send_json({
+                        "type": "timing",
+                        "stt": f"{stt_time:.1f}s",
+                        "llm": f"{llm_time:.1f}s",
+                        "total": f"{total:.1f}s",
+                        "frames": len(frames),
+                    })
                 except Exception as e:
                     log.error(f"[3/3] ❌ LLM 调用失败: {e}\n{traceback.format_exc()}")
                     await ws.send_json({"type": "error", "text": "AI 暂时不可用，稍后重试"})

@@ -89,6 +89,8 @@
                 } else if (msg.type === 'response') {
                     streamFinalize();
                     pttLabel.textContent = '点击开始录音';
+                } else if (msg.type === 'timing') {
+                    addMessage('system', `⏱ STT ${msg.stt} + LLM ${msg.llm} + ${msg.frames}帧 = ${msg.total}`);
                 } else if (msg.type === 'error') {
                     streamFinalize();
                     addMessage('system', '⚠️ ' + msg.text);
