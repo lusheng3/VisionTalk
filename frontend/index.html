@@ -226,6 +226,7 @@
 
         function captureFrame() {
             if (!video.videoWidth || !video.videoHeight) return;  // video stream not ready yet
+            const canvas = document.createElement('canvas');
             const rawW = video.videoWidth;
             const rawH = video.videoHeight;
             const scale = Math.min(1, FRAME_MAX_WIDTH / rawW);
