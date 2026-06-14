@@ -238,7 +238,7 @@
             const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
             const phash = pHash(imgData, 32);
             const dist = lastPHash !== null ? hammingDistance(phash, lastPHash) : 0;
-            if (dist < DEDUP_HAMMING_THRESHOLD) return;
+            if (lastPHash !== null && dist < DEDUP_HAMMING_THRESHOLD) return;
             lastPHash = phash;
             const isAction = dist >= ACTION_HAMMING_THRESHOLD;
 
