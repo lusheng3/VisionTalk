@@ -61,11 +61,19 @@ class STTEngine:
                 result = dashscope.audio.asr.Transcription.fetch(task=tid)
                 status = result.output.get("task_status", "")
                 if status == "SUCCEEDED":
-                    results = result.output.get("results", [{}])
-                    text = results[0].get("results", [{}])[0].get("text", "") if results else ""
                     elapsed = time.time() - t0
-                    log.info(f"[STT] ☁️ Paraformer: 「{text}」 耗时 {elapsed:.1f}s")
-                    return text
+                    # Debug: dump full output structure
+                    log.info(f"[STT] Raw output: {result.output}")
+                    # Parse: output.results[0] -> {file_url, results: [{text}], subtask_status}
+                    outer_results = result.output.get("results", [])
+                    if outer_results:
+                        inner = outer_results[0].get("results", [])
+                        if inner:
+                            text = inner[0].get("text", "")
+                            log.info(f"[STT] ☁️ Paraformer: 「{text}」 耗时 {elapsed:.1f}s")
+                            return text
+                    log.warning(f"[STT] No text in results")
+                    return ""
                 elif status == "FAILED":
                     log.error(f"[STT] Task FAILED: {result.output.get('message')}")
                     return ""
