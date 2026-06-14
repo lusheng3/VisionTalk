@@ -60,11 +60,11 @@
                 const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
                 video.srcObject = stream;
                 // Wait for video to be ready before starting frame capture
-                await new Promise((resolve) => {
-                    video.onloadedmetadata = () => {
-                        video.play().then(resolve);
-                    };
-                });
+                if (video.readyState < 2) {
+                    await new Promise((resolve) => {
+                        video.onloadedmetadata = () => video.play().then(resolve);
+                    });
+                }
                 camStatus.textContent = '📷 摄像头已就绪';
                 camStatus.className = 'status live';
                 startFrameCapture(FRAME_INTERVAL_IDLE);
