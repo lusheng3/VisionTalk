@@ -86,6 +86,13 @@ async def websocket_endpoint(ws: WebSocket):
                     audio = decode_wav_base64(audio_b64)
                     duration = len(audio) / 16000
                     log.info(f"[1/3] ✅ 解码成功: {duration:.1f}秒, {len(audio)}采样点")
+                    # Debug: save raw WAV for inspection
+                    import tempfile
+                    tmp_wav = tempfile.mktemp(suffix=".wav", prefix="vtdbg_")
+                    raw = base64.b64decode(audio_b64)
+                    with open(tmp_wav, "wb") as f:
+                        f.write(raw)
+                    log.info(f"[1/3] 🔍 调试音频已保存: {tmp_wav}")
                 except Exception as e:
                     log.error(f"[1/3] ❌ WAV解码失败: {e}")
                     await ws.send_json({"type": "error", "text": "音频解码失败"})
