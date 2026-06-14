@@ -203,15 +203,11 @@
             const jpeg = canvas.toDataURL('image/jpeg', FRAME_JPEG_QUALITY);
             const base64 = jpeg.split(',')[1];
 
-            // Simple dedup: skip if nearly identical to last frame
-            if (lastFrameHash !== null) {
-                // Quick check: compare first 100 chars of base64 (JPEG header changes if image differs)
-                const hash = base64.substring(0, 100);
-                if (hash === lastFrameHash) return;
-                lastFrameHash = hash;
-            } else {
-                lastFrameHash = base64.substring(0, 100);
-            }
+            // Simple dedup: skip if image content nearly identical
+            // Compare middle section of base64 (JPEG headers are always same)
+            const hash = base64.substring(base64.length >> 1, (base64.length >> 1) + 200);
+            if (lastFrameHash !== null && hash === lastFrameHash) return;
+            lastFrameHash = hash;
 
             frameBuffer.push(base64);
             if (frameBuffer.length > FRAME_BUFFER_SIZE) {
@@ -248,10 +244,11 @@
                 indices.push(frameBuffer.length - 1);
                 frames = indices.map(i => frameBuffer[i]);
             }
-            // Secondary dedup: remove consecutive near-identical frames
+            // Secondary dedup: compare middle of base64 (not JPEG headers)
             const deduped = [frames[0]];
             for (let i = 1; i < frames.length; i++) {
-                if (frames[i].substring(0, 100) !== frames[i - 1].substring(0, 100)) {
+                const mid = (s) => s.substring(s.length >> 1, (s.length >> 1) + 200);
+                if (mid(frames[i]) !== mid(frames[i - 1])) {
                     deduped.push(frames[i]);
                 }
             }
