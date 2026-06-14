@@ -178,13 +178,13 @@
         }
 
         // ── Frame Capture ──
-        const FRAME_BUFFER_SIZE = 30;
-        const FRAME_INTERVAL_IDLE = 3000;
+        const FRAME_INTERVAL_IDLE = 2000;
         const FRAME_INTERVAL_SPEECH = 500;
-        const FRAME_MAX_WIDTH = 384;      // downscale for LLM
-        const FRAME_JPEG_QUALITY = 0.55;  // smaller size, fewer tokens
-        const FRAME_DEDUP_THRESHOLD = 0.95; // skip near-identical frames
+        const FRAME_MAX_WIDTH = 384;
+        const FRAME_JPEG_QUALITY = 0.55;
+        const FRAME_WINDOW_SECONDS = 15;  // time-based sliding window
 
+        // frameBuffer: [{base64, timestamp, hash, isAction}, ...]
         let frameBuffer = [];
         let frameTimer = null;
         let lastFrameHash = null;
@@ -203,16 +203,16 @@
             const jpeg = canvas.toDataURL('image/jpeg', FRAME_JPEG_QUALITY);
             const base64 = jpeg.split(',')[1];
 
-            // Simple dedup: skip if image content nearly identical
-            // Compare middle section of base64 (JPEG headers are always same)
+            // Simple dedup: compare middle section of base64
             const hash = base64.substring(base64.length >> 1, (base64.length >> 1) + 200);
             if (lastFrameHash !== null && hash === lastFrameHash) return;
             lastFrameHash = hash;
 
-            frameBuffer.push(base64);
-            if (frameBuffer.length > FRAME_BUFFER_SIZE) {
-                frameBuffer = frameBuffer.slice(-FRAME_BUFFER_SIZE);
-            }
+            const now = Date.now();
+            frameBuffer.push({ base64, timestamp: now, hash, isAction: false });
+            // Purge frames older than window
+            const cutoff = now - FRAME_WINDOW_SECONDS * 1000;
+            frameBuffer = frameBuffer.filter(f => f.timestamp > cutoff);
         }
 
         function startFrameCapture(interval) {
@@ -234,25 +234,26 @@
             else if (durationSeconds <= 10) count = 5;
             else if (durationSeconds <= 20) count = 8;
             else count = 10;
-            let frames;
+            let selected;
             if (frameBuffer.length <= count) {
-                frames = [...frameBuffer];
+                selected = [...frameBuffer];
             } else {
                 const step = (frameBuffer.length - 1) / (count - 1);
                 const indices = [];
                 for (let i = 0; i < count - 1; i++) indices.push(Math.floor(i * step));
                 indices.push(frameBuffer.length - 1);
-                frames = indices.map(i => frameBuffer[i]);
+                selected = indices.map(i => frameBuffer[i]);
             }
-            // Secondary dedup: compare middle of base64 (not JPEG headers)
-            const deduped = [frames[0]];
-            for (let i = 1; i < frames.length; i++) {
-                const mid = (s) => s.substring(s.length >> 1, (s.length >> 1) + 200);
-                if (mid(frames[i]) !== mid(frames[i - 1])) {
-                    deduped.push(frames[i]);
+            // Secondary dedup on frame objects
+            const deduped = [selected[0]];
+            for (let i = 1; i < selected.length; i++) {
+                const mid = (f) => f.base64.substring(f.base64.length >> 1, (f.base64.length >> 1) + 200);
+                if (mid(selected[i]) !== mid(selected[i - 1])) {
+                    deduped.push(selected[i]);
                 }
             }
-            return deduped;
+            // Return base64 strings
+            return deduped.map(f => f.base64);
         }
 
         // ── Messages ──
