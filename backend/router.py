@@ -30,7 +30,7 @@ async def needs_visual(user_text: str) -> bool:
     try:
         client = _get_client()
         resp = await client.chat.completions.create(
-            model="deepseek-v4-flash",
+            model="deepseek-chat",
             messages=[
                 {"role": "system", "content": ROUTER_PROMPT},
                 {"role": "user", "content": user_text},
@@ -40,11 +40,8 @@ async def needs_visual(user_text: str) -> bool:
         raw = resp.choices[0].message.content or ""
         result = raw.strip().upper()
         elapsed = time.time() - t0
-        # Debug: log full response on empty
         if not result:
-            log.warning(f"[Router] ⚠️ empty response → fallback YES")
-            log.warning(f"[Router] debug: finish_reason={resp.choices[0].finish_reason}, model={resp.model}")
-            log.warning(f"[Router] debug: full message={resp.choices[0].message}")
+            log.warning(f"[Router] ⚠️ empty response, fallback → YES")
             return True
         is_visual = "YES" in result
         log.info(f"[Router] 🧠 DeepSeek → {result} | 耗时 {elapsed:.2f}s | text='{user_text[:30]}'")
