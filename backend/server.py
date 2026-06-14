@@ -84,8 +84,9 @@ async def websocket_endpoint(ws: WebSocket):
                 # WAV 解码
                 try:
                     audio = decode_wav_base64(audio_b64)
-                    duration = len(audio) / 16000
-                    log.info(f"[1/3] ✅ 解码成功: {duration:.1f}秒, {len(audio)}采样点")
+                    actual_sr = data.get("sample_rate", 16000)
+                    duration = len(audio) / actual_sr
+                    log.info(f"[1/3] ✅ 解码成功: {duration:.1f}秒, {len(audio)}采样点, {actual_sr}Hz")
                     # Debug: save raw WAV for inspection
                     import tempfile
                     tmp_wav = tempfile.mktemp(suffix=".wav", prefix="vtdbg_")
@@ -103,7 +104,7 @@ async def websocket_endpoint(ws: WebSocket):
                     if stt_engine is None:
                         log.info("[2/3] ☁️ 调用云端 STT (Paraformer-v2)...")
                         stt_engine = STTEngine()
-                    text = stt_engine.transcribe(audio, 16000)
+                    text = stt_engine.transcribe(audio, actual_sr)
                     stt_cost = time.time() - t_start
                     if text.strip():
                         log.info(f"[2/3] ✅ STT 转写结果: 「{text.strip()}」 耗时 {stt_cost:.1f}s")
