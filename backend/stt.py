@@ -6,8 +6,9 @@ import io
 import wave
 import time
 import logging
+import os
 
-import httpx
+import dashscope
 import numpy as np
 
 from backend.config import settings
@@ -19,19 +20,10 @@ class STTEngine:
     """DashScope Paraformer-v2 云端语音识别。"""
 
     def __init__(self):
-        self._api_key = settings.dashscope_api_key
-        self._url = "https://dashscope.aliyuncs.com/api/v1/services/audio/asr/transcription"
+        dashscope.api_key = settings.dashscope_api_key
 
     def transcribe(self, audio: np.ndarray, sample_rate: int = 16000) -> str:
-        """将音频数据转写为文字。
-
-        Args:
-            audio: float32 单声道音频，范围 [-1, 1]。
-            sample_rate: 采样率，默认 16000。
-
-        Returns:
-            转写后的文字字符串。失败返回空字符串。
-        """
+        """将音频数据转写为文字。"""
         if len(audio) < sample_rate * 0.3:
             return ""
 
@@ -44,34 +36,22 @@ class STTEngine:
                 wf.setsampwidth(2)
                 wf.setframerate(sample_rate)
                 wf.writeframes(pcm.tobytes())
-            wav_bytes = buf.getvalue()
+            buf.seek(0)
 
-            # Call DashScope Paraformer v2
             t0 = time.time()
-            response = httpx.post(
-                self._url,
-                headers={"Authorization": f"Bearer {self._api_key}"},
-                files={"file": ("audio.wav", wav_bytes, "audio/wav")},
-                data={
-                    "model": "paraformer-v2",
-                    "format": "wav",
-                    "sample_rate": str(sample_rate),
-                },
-                timeout=30,
+            response = dashscope.audio.asr.Transcription.call(
+                model="paraformer-v2",
+                format="wav",
+                sample_rate=sample_rate,
+                file=buf,
             )
             elapsed = time.time() - t0
 
             if response.status_code != 200:
-                log.error(f"[STT] API {response.status_code}: {response.text[:200]}")
+                log.error(f"[STT] API {response.status_code}: {response.message}")
                 return ""
 
-            result = response.json()
-            output = result.get("output", {})
-            if output.get("task_status") != "SUCCEEDED":
-                log.error(f"[STT] Task failed: {output}")
-                return ""
-
-            results = output.get("results", [])
+            results = response.output.get("results", [])
             text = results[0].get("text", "") if results else ""
             log.info(f"[STT] ☁️ Paraformer: 「{text}」 耗时 {elapsed:.1f}s")
             return text
