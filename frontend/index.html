@@ -59,15 +59,10 @@
             try {
                 const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
                 video.srcObject = stream;
-                // Wait for video to be ready before starting frame capture
-                if (video.readyState < 2) {
-                    await new Promise((resolve) => {
-                        video.onloadedmetadata = () => video.play().then(resolve);
-                    });
-                }
                 camStatus.textContent = '📷 摄像头已就绪';
                 camStatus.className = 'status live';
-                startFrameCapture(FRAME_INTERVAL_IDLE);
+                // Delay capture start to let video initialize
+                setTimeout(() => startFrameCapture(FRAME_INTERVAL_IDLE), 1000);
             } catch (e) {
                 camStatus.textContent = '📷 需要摄像头权限';
                 camStatus.className = 'status off';
@@ -231,8 +226,6 @@
 
         function captureFrame() {
             if (!video.videoWidth || !video.videoHeight) return;  // video stream not ready yet
-            // Double-check: video must actually be playing
-            if (video.readyState < 2) return;
             const rawW = video.videoWidth;
             const rawH = video.videoHeight;
             const scale = Math.min(1, FRAME_MAX_WIDTH / rawW);
