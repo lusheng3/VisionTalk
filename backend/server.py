@@ -61,6 +61,8 @@ async def websocket_endpoint(ws: WebSocket):
     await ws.accept()
     log.info(f"[连接] {client} 已连接")
 
+    pending_frames: list[str] = []
+
     try:
         while True:
             data = await ws.receive_json()
@@ -69,12 +71,11 @@ async def websocket_endpoint(ws: WebSocket):
 
             if msg_type == "ptt_start":
                 log.info(f"[PTT] 🎤 用户开始录音")
-                await ws.send_json({"type": "status", "text": "录音中..."})
 
             elif msg_type == "ptt_stop":
-                n_frames = len(data.get("frames", []))
-                log.info(f"[PTT] ⏹ 录音结束，前端传来 {n_frames} 帧")
-                await ws.send_json({"type": "status", "text": "转写中..."})
+                pending_frames = data.get("frames", [])
+                log.info(f"[PTT] ⏹ 录音结束，前端传来 {len(pending_frames)} 帧")
+                await ws.send_json({"type": "status", "text": "🔊 语音转文字中..."})
 
             elif msg_type == "audio":
                 audio_b64 = data.get("data", "")
@@ -83,8 +84,16 @@ async def websocket_endpoint(ws: WebSocket):
                 # WAV 解码
                 try:
                     audio = decode_wav_base64(audio_b64)
-                    duration = len(audio) / 16000
-                    log.info(f"[1/3] ✅ 解码成功: {duration:.1f}秒, {len(audio)}采样点")
+                    actual_sr = data.get("sample_rate", 16000)
+                    duration = len(audio) / actual_sr
+                    log.info(f"[1/3] ✅ 解码成功: {duration:.1f}秒, {len(audio)}采样点, {actual_sr}Hz")
+                    # Debug: save raw WAV for inspection
+                    import tempfile
+                    tmp_wav = tempfile.mktemp(suffix=".wav", prefix="vtdbg_")
+                    raw = base64.b64decode(audio_b64)
+                    with open(tmp_wav, "wb") as f:
+                        f.write(raw)
+                    log.info(f"[1/3] 🔍 调试音频已保存: {tmp_wav}")
                 except Exception as e:
                     log.error(f"[1/3] ❌ WAV解码失败: {e}")
                     await ws.send_json({"type": "error", "text": "音频解码失败"})
@@ -93,9 +102,9 @@ async def websocket_endpoint(ws: WebSocket):
                 # STT 转写
                 try:
                     if stt_engine is None:
-                        log.info("[2/3] 🔧 首次加载 STT 模型 (faster-whisper tiny)...")
+                        log.info("[2/3] ☁️ 调用云端 STT (Paraformer-v2)...")
                         stt_engine = STTEngine()
-                    text = stt_engine.transcribe(audio, 16000)
+                    text = stt_engine.transcribe(audio, actual_sr)
                     stt_cost = time.time() - t_start
                     if text.strip():
                         log.info(f"[2/3] ✅ STT 转写结果: 「{text.strip()}」 耗时 {stt_cost:.1f}s")
@@ -111,15 +120,34 @@ async def websocket_endpoint(ws: WebSocket):
                     log.info(f"[本轮结束] 无文本，跳过 LLM")
                     continue
 
+                stt_time = time.time() - t_start
                 await ws.send_json({"type": "transcript", "text": text.strip()})
+                await ws.send_json({"type": "status", "text": "🤖 AI 思考中..."})
 
                 # LLM 调用（流式）
                 try:
                     if llm_engine is None:
                         log.info("[3/3] 🔧 首次加载 LLM...")
                         llm_engine = QwenVisionLLM()
-                    frames = data.get("frames", [])
-                    log.info(f"[3/3] 🤖 流式 LLM | 输入文本=「{text.strip()}」 | 帧数={len(frames)}")
+                    frames = pending_frames
+                    pending_frames = []
+
+                    # 非视觉问题跳过图片（省 token + 加速）
+                    VISUAL_KEYWORDS = [
+                        "看", "这", "那", "什么", "画面", "图片", "照片", "颜色",
+                        "哪个", "哪里", "里面", "手上", "手里", "桌面", "屏幕",
+                        "这是", "那是", "介绍", "描述", "识别", "镜头", "摄像头",
+                        "你看到", "看看", "帮我", "瞧瞧",
+                    ]
+                    text_lower = text.strip()
+                    is_visual = any(kw in text_lower for kw in VISUAL_KEYWORDS)
+                    if not is_visual and frames:
+                        log.info(f"[3/3] 🎯 非视觉问题，跳过 {len(frames)} 帧")
+                        frames = []
+                    elif frames:
+                        log.info(f"[3/3] 🤖 流式 LLM | 输入文本=「{text.strip()}」 | 帧数={len(frames)}")
+                    else:
+                        log.info(f"[3/3] 🤖 流式 LLM | 输入文本=「{text.strip()}」 | 无帧")
 
                     reply_parts = []
                     first_token_time = None
@@ -135,10 +163,18 @@ async def websocket_endpoint(ws: WebSocket):
                         await ws.send_json({"type": "stream", "text": token})
 
                     reply = "".join(reply_parts)
-                    llm_cost = time.time() - t_start
+                    llm_time = time.time() - t_start - stt_time
+                    total = time.time() - t_start
                     log.info(f"[3/3] ✅ LLM 回复: 「{reply[:80]}{'...' if len(reply) > 80 else ''}」")
-                    log.info(f"[3/3]    首token={first_token_time:.1f}s | 总耗时={llm_cost:.1f}s")
+                    log.info(f"[3/3]    首token={first_token_time:.1f}s | LLM纯耗时={llm_time:.1f}s | 总耗时={total:.1f}s")
                     await ws.send_json({"type": "response", "text": reply})
+                    await ws.send_json({
+                        "type": "timing",
+                        "stt": f"{stt_time:.1f}s",
+                        "llm": f"{llm_time:.1f}s",
+                        "total": f"{total:.1f}s",
+                        "frames": len(frames),
+                    })
                 except Exception as e:
                     log.error(f"[3/3] ❌ LLM 调用失败: {e}\n{traceback.format_exc()}")
                     await ws.send_json({"type": "error", "text": "AI 暂时不可用，稍后重试"})
