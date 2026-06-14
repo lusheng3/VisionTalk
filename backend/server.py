@@ -61,6 +61,8 @@ async def websocket_endpoint(ws: WebSocket):
     await ws.accept()
     log.info(f"[连接] {client} 已连接")
 
+    pending_frames: list[str] = []
+
     try:
         while True:
             data = await ws.receive_json()
@@ -69,11 +71,10 @@ async def websocket_endpoint(ws: WebSocket):
 
             if msg_type == "ptt_start":
                 log.info(f"[PTT] 🎤 用户开始录音")
-                await ws.send_json({"type": "status", "text": "录音中..."})
 
             elif msg_type == "ptt_stop":
-                n_frames = len(data.get("frames", []))
-                log.info(f"[PTT] ⏹ 录音结束，前端传来 {n_frames} 帧")
+                pending_frames = data.get("frames", [])
+                log.info(f"[PTT] ⏹ 录音结束，前端传来 {len(pending_frames)} 帧")
                 await ws.send_json({"type": "status", "text": "转写中..."})
 
             elif msg_type == "audio":
@@ -118,7 +119,8 @@ async def websocket_endpoint(ws: WebSocket):
                     if llm_engine is None:
                         log.info("[3/3] 🔧 首次加载 LLM...")
                         llm_engine = QwenVisionLLM()
-                    frames = data.get("frames", [])
+                    frames = pending_frames
+                    pending_frames = []
                     log.info(f"[3/3] 🤖 流式 LLM | 输入文本=「{text.strip()}」 | 帧数={len(frames)}")
 
                     reply_parts = []
