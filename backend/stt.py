@@ -46,33 +46,35 @@ class STTEngine:
 
             # Poll until SUCCEEDED, then grab transcription_url
             transcript_url = None
-            for _ in range(60):
+            for i in range(60):
                 time.sleep(0.5)
                 r = dashscope.audio.asr.Transcription.fetch(task=tid)
                 s = r.output.get("task_status", "")
+                if i % 4 == 0:  # log every 2s
+                    log.info(f"[STT] poll {i}: status={s}")
                 if s == "SUCCEEDED":
-                    # Walk nested dict to find transcription_url
-                    def find_url(d, depth=0):
-                        if depth > 6:
-                            return None
+                    # Walk nested dict to find transcription_url (no depth limit)
+                    def find_url(d):
                         if isinstance(d, dict):
                             if "transcription_url" in d:
                                 return d["transcription_url"]
                             for v in d.values():
-                                u = find_url(v, depth + 1)
+                                u = find_url(v)
                                 if u:
                                     return u
                         elif isinstance(d, list):
                             for item in d:
-                                u = find_url(item, depth + 1)
+                                u = find_url(item)
                                 if u:
                                     return u
                         return None
 
                     transcript_url = find_url(r.output)
+                    if not transcript_url:
+                        log.error(f"[STT] SUCCEEDED but no url in: {str(r.output)[:500]}")
                     break
                 elif s == "FAILED":
-                    log.error("[STT] task FAILED")
+                    log.error(f"[STT] task FAILED: {r.output.get('message', '')}")
                     return ""
 
             if not transcript_url:
