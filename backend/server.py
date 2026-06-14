@@ -94,7 +94,7 @@ async def websocket_endpoint(ws: WebSocket):
                 # STT 转写
                 try:
                     if stt_engine is None:
-                        log.info("[2/3] 🔧 首次加载 STT 模型 (faster-whisper tiny)...")
+                        log.info("[2/3] ☁️ 调用云端 STT (Paraformer-v2)...")
                         stt_engine = STTEngine()
                     text = stt_engine.transcribe(audio, 16000)
                     stt_cost = time.time() - t_start
